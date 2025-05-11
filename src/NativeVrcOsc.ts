@@ -3,6 +3,11 @@ import { TurboModuleRegistry } from 'react-native';
 
 export interface Spec extends TurboModule {
   multiply(a: number, b: number): number;
+  createClient(address: string, port: number): void;
+  createServer(address: string, port: number): void;
+  sendMessage(address: string, data: any[]): void;
+  addListener(eventType: string): void;
+  removeListeners(count: number): void;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('VrcOsc');

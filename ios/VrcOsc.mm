@@ -1,18 +1,15 @@
-#import "VrcOsc.h"
+#import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 
-@implementation VrcOsc
-RCT_EXPORT_MODULE()
+@interface RCT_EXTERN_MODULE(VrcOsc, RCTEventEmitter)
 
-- (NSNumber *)multiply:(double)a b:(double)b {
-    NSNumber *result = @(a * b);
+RCT_EXTERN_METHOD(createClient:(NSString *)address
+                  port:(NSNumber *)port)
 
-    return result;
-}
+RCT_EXTERN_METHOD(sendMessage:(NSString *)address
+                  data:(NSArray *)data)
 
-- (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
-    (const facebook::react::ObjCTurboModule::InitParams &)params
-{
-    return std::make_shared<facebook::react::NativeVrcOscSpecJSI>(params);
-}
+RCT_EXTERN_METHOD(createServer:(NSString *)address
+                  port:(NSNumber *)port)
 
 @end
