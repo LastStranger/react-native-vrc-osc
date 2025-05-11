@@ -6,17 +6,19 @@ react-native osc library particularly for vrchat programers
 
 ```sh
 npm install react-native-vrc-osc
+pod install
 ```
 
 ## Usage
 
 
 ```js
-import { multiply } from 'react-native-vrc-osc';
+import { createClient, sendMessage } from 'react-native-vrc-osc';
 
 // ...
 
-const result = multiply(3, 7);
+createClient('192.168.31.100', 9000);
+sendMessage('/chatbox/input', ["hello world", true, true]);
 ```
 
 
