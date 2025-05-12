@@ -11,3 +11,9 @@ export function createServer(address: string, port: number): void {
 export function sendMessage(address: string, data: any[]): void {
   VrcOsc.sendMessage(address, data);
 }
+
+export default {
+  createClient,
+  createServer,
+  sendMessage,
+};
