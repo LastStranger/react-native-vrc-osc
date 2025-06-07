@@ -11,7 +11,11 @@ class VrcOsc: RCTEventEmitter, OSCServerDelegate {
 
     @objc(createClient:port:)
     func createClient(address: String, port: NSNumber) -> Void {
-        client = OSCClient(address: address, port: port.intValue)
+        if client == nil || client.address != address || client.port != port.intValue {
+            client = OSCClient(address: address, port: port.intValue)
+        } else {
+            print("Client with the same address and port already exists.")
+        }
     }
 
     @objc(sendMessage:data:)
