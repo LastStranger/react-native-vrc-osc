@@ -5,6 +5,8 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableType
 import com.facebook.react.module.annotations.ReactModule
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.ByteArrayOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -20,6 +22,11 @@ class VrcOscModule(reactContext: ReactApplicationContext) :
   private var clientPort: Int = 0
   private val executor = Executors.newSingleThreadExecutor()
 
+  private var serverSocket: DatagramSocket? = null
+  @Volatile
+  private var isServerRunning = false
+  private val serverExecutor = Executors.newSingleThreadExecutor()
+
   override fun getName(): String {
     return NAME
   }
@@ -34,8 +41,124 @@ class VrcOscModule(reactContext: ReactApplicationContext) :
     Log.d(NAME, "createClient: $address:$clientPort")
   }
 
+  private fun stopServer() {
+    isServerRunning = false
+    try {
+      serverSocket?.close()
+    } catch (e: Exception) {
+      Log.e(NAME, "Error closing server socket: ${e.message}")
+    }
+    serverSocket = null
+  }
+
+  private fun decodeOsc(bytes: ByteArray, length: Int): Pair<String, List<Any>>? {
+    var offset = 0
+
+    fun readString(): String? {
+      if (offset >= length) return null
+      val start = offset
+      while (offset < length && bytes[offset] != 0.toByte()) {
+        offset++
+      }
+      if (offset >= length) return null
+      val strBytes = bytes.copyOfRange(start, offset)
+      offset++ // Skip null terminator
+      val padding = (4 - (offset % 4)) % 4
+      offset += padding
+      return String(strBytes, Charsets.UTF_8)
+    }
+
+    val address = readString() ?: return null
+    if (!address.startsWith("/")) return null
+
+    val typeTag = readString() ?: return null
+    if (!typeTag.startsWith(",")) return null
+
+    val args = mutableListOf<Any>()
+    for (i in 1 until typeTag.length) {
+      val tag = typeTag[i]
+      when (tag) {
+        'i' -> {
+          if (offset + 4 > length) break
+          val value = ByteBuffer.wrap(bytes, offset, 4).int
+          args.add(value)
+          offset += 4
+        }
+        'f' -> {
+          if (offset + 4 > length) break
+          val value = ByteBuffer.wrap(bytes, offset, 4).float
+          args.add(value)
+          offset += 4
+        }
+        's' -> {
+          val str = readString() ?: break
+          args.add(str)
+        }
+        'T' -> {
+          args.add(true)
+        }
+        'F' -> {
+          args.add(false)
+        }
+      }
+    }
+    return Pair(address, args)
+  }
+
   override fun createServer(address: String, port: Double) {
-    Log.w(NAME, "createServer() not implemented on Android yet (address=$address, port=$port)")
+    val portInt = port.toInt()
+    Log.d(NAME, "createServer: $address:$portInt")
+    stopServer()
+
+    if (portInt > 0) {
+      try {
+        serverSocket = if (address.isEmpty() || address == "0.0.0.0") {
+          DatagramSocket(portInt)
+        } else {
+          DatagramSocket(portInt, InetAddress.getByName(address))
+        }
+        isServerRunning = true
+
+        serverExecutor.execute {
+          val buffer = ByteArray(2048)
+          while (isServerRunning) {
+            try {
+              val socket = serverSocket ?: break
+              val packet = DatagramPacket(buffer, buffer.size)
+              socket.receive(packet)
+
+              val result = decodeOsc(packet.data, packet.length)
+              if (result != null) {
+                val (addr, args) = result
+                val params = Arguments.createMap().apply {
+                  putString("address", addr)
+                  putArray("data", Arguments.createArray().apply {
+                    for (arg in args) {
+                      when (arg) {
+                        is Int -> pushInt(arg)
+                        is Float -> pushDouble(arg.toDouble())
+                        is Double -> pushDouble(arg)
+                        is Boolean -> pushBoolean(arg)
+                        is String -> pushString(arg)
+                      }
+                    }
+                  })
+                }
+                reactApplicationContext
+                  .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                  .emit("GotMessage", params)
+              }
+            } catch (e: Exception) {
+              if (isServerRunning) {
+                Log.e(NAME, "Error receiving packet: ${e.message}")
+              }
+            }
+          }
+        }
+      } catch (e: Exception) {
+        Log.e(NAME, "Error starting OSC server: ${e.message}")
+      }
+    }
   }
 
   override fun sendMessage(address: String, data: ReadableArray) {
@@ -121,8 +244,14 @@ class VrcOscModule(reactContext: ReactApplicationContext) :
 
   override fun removeListeners(count: Double) { }
 
+  override fun invalidate() {
+    stopServer()
+    executor.shutdown()
+    serverExecutor.shutdown()
+    super.invalidate()
+  }
+
   companion object {
     const val NAME = "VrcOsc"
   }
 }
-

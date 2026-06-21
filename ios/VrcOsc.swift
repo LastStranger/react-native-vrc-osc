@@ -37,18 +37,49 @@ class VrcOsc: RCTEventEmitter, OSCServerDelegate {
     }
 
 
+    var hasListeners = false
+
+    override func startObserving() {
+        hasListeners = true
+    }
+
+    override func stopObserving() {
+        hasListeners = false
+    }
+
+    @objc override func invalidate() {
+        print("[Swift VrcOsc] Invalidate called, releasing server")
+        if server != nil {
+            server = nil
+        }
+        super.invalidate()
+    }
+
     @objc(createServer:port:)
     func createServer(address: String, port: NSNumber) -> Void {
-        server = OSCServer(address: address, port: port.intValue)
-        server.delegate = self
-        server.start()
+        print("[Swift VrcOsc] createServer called with address: '\(address)', port: \(port.intValue)")
+        if server != nil {
+            print("[Swift VrcOsc] Stopping existing OSC server")
+            server = nil
+        }
+        if port.intValue > 0 {
+            print("[Swift VrcOsc] Starting OSC server on port: \(port.intValue)")
+            server = OSCServer(address: address, port: port.intValue)
+            server.delegate = self
+            server.start()
+        }
     }
 
     func didReceive(_ message: OSCMessage) {
-        let response: NSMutableDictionary = [:]
-        response["address"] = message.address.string
-        response["data"] = message.arguments
-        sendEvent(withName: "GotMessage", body: response)
+        print("[Swift VrcOsc] Received OSC message: \(message.address.string) -> \(message.arguments)")
+        if hasListeners {
+            let response: NSMutableDictionary = [:]
+            response["address"] = message.address.string
+            response["data"] = message.arguments
+            sendEvent(withName: "GotMessage", body: response)
+        } else {
+            print("[Swift VrcOsc] Ignored message, no JS listeners registered yet")
+        }
     }
 
     override func supportedEvents() -> [String]! {

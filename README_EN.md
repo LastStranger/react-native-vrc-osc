@@ -16,7 +16,7 @@ A high-performance Open Sound Control (OSC) library for React Native, specifical
 
 - 🚀 **High Performance**: Native UDP OSC messaging on both iOS and Android with minimal latency.
 - 💬 **VRChat Optimized**: Perfect for sending chatbox text, avatar parameters, and controller inputs.
-- 📡 **Bi-directional (iOS)**: Support for both sending OSC messages (Client) and receiving OSC feedback (Server, iOS only).
+- 📡 **Bi-directional**: Support for both sending OSC messages (Client) and receiving OSC feedback (Server, supported on both iOS and Android).
 - 🛠️ **Type Safe**: First-class TypeScript support.
 - ⚡ **TurboModule Support**: Fully ready for the New Architecture of React Native.
 
@@ -43,7 +43,7 @@ cd ios && pod install
 | Feature | Android | iOS |
 | :--- | :---: | :---: |
 | **OSC Client (Send)** | ✅ | ✅ |
-| **OSC Server (Receive)** | ❌ *(Planned)* | ✅ |
+| **OSC Server (Receive)** | ✅ | ✅ |
 
 ---
 
@@ -80,7 +80,7 @@ export default function App() {
 }
 ```
 
-### 2. Receiving OSC Messages (Server) - iOS Only
+### 2. Receiving OSC Messages (Server)
 
 To listen for avatar parameter changes or other OSC output messages from VRChat, you can run an OSC Server (default VRChat output port is `9001`) and listen to native events.
 
@@ -135,6 +135,35 @@ This library is designed to make it easy to follow the official VRChat OSC proto
 - Example: `sendMessage('/input/Jump', [1])`
 
 *For more details on available addresses, see the official [VRChat OSC Documentation](https://creators.vrchat.com/platforms/android/osc/).*
+
+---
+
+## Troubleshooting & FAQ
+
+### 1. Why am I not receiving any OSC messages from VRChat on my physical iOS/Android device?
+
+**Reason**:
+By default, VRChat only sends OSC output data to `127.0.0.1:9001` (localhost on the PC). If your phone and PC are on the same Wi-Fi network, VRChat does not automatically know your phone's IP address, so the packets never reach the phone.
+
+**Solution**:
+You must override VRChat's default output IP via Steam launch options:
+1. Find your phone's local IP address on Wi-Fi settings (e.g., `192.168.1.100`).
+2. Open Steam, right-click **VRChat** -> **Properties** -> **General** -> find **Launch Options** at the bottom.
+3. Add the following parameter (replace `YOUR_PHONE_IP` with your phone's actual IP address):
+   ```sh
+   --osc=9000:YOUR_PHONE_IP:9001
+   ```
+   *Example: `--osc=9000:192.168.1.100:9001`*
+4. Restart VRChat. Move your avatar or type in the chatbox, and your phone will receive the messages instantly.
+
+### 2. Why does the console flood with `Sending 'GotMessage' with no listeners registered` warnings after Reloading the JS bundle?
+
+**Reason**:
+During development, reloading the JS bundle resets all JS-side listeners, but the native UDP server (on Android or iOS) keeps running in the background. If VRChat is continuously sending high-frequency parameter updates, the native module continues emitting `GotMessage` events to JS, but since JS is reloading and has no active subscription yet, React Native logs this warning.
+
+**Solution**:
+* This package implements the native `invalidate` lifecycle and `hasListeners` check to automatically release resources and ignore events when there are no active JS-side subscribers, preventing or minimizing these warnings.
+* When turning off the receiver in your application UI, it is recommended to call `createServer('0.0.0.0', 0)` (i.e. setting port to `0`) to explicitly command the native module to stop the socket listener and free the UDP port.
 
 ---
 
